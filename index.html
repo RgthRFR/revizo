@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F5F6F8">
+<title>Révizo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --bg: #F5F6F8; --surface: #FFFFFF; --surface-2: #EEF0F4;
+    --ink: #1B2A4A; --ink-soft: #55607A; --border: #E2E5EC;
+    --accent: #2F7864; --accent-ink: #FFFFFF; --amber: #C98A2C; --coral: #B84A3E;
+    --font-serif: 'Fraunces', Georgia, serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --radius: 12px; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10141C; --surface: #181D28; --surface-2: #1F2530;
+      --ink: #ECEFF3; --ink-soft: #A6ADBD; --border: #2A3140;
+      --accent: #4FAE93; --accent-ink: #0B1712; --amber: #E3A94D; --coral: #E2776A;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans);
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: var(--font-serif); font-weight: 600; line-height: 1.2; margin: 0 0 0.5em; }
+  h1 { font-size: 1.7rem; } h2 { font-size: 1.3rem; } h3 { font-size: 1.1rem; margin-top: 1.2em; }
+  p { line-height: 1.55; }
+  .muted { color: var(--ink-soft); }
+  .container { max-width: 640px; margin: 0 auto; padding: 20px 18px 60px; }
+  .topbar {
+    position: sticky; top: 0; z-index: 5; padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 14px;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .topbar h1 { margin: 0; font-size: 1.4rem; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn, .btn-text {
+    background: none; border: none; color: var(--ink-soft); font-family: var(--font-sans);
+    font-size: 0.95rem; cursor: pointer; padding: 4px 0;
+  }
+  .back-btn:hover, .btn-text:hover { color: var(--ink); }
+  .loading, .error-box { padding: 60px 24px; text-align: center; color: var(--ink-soft); }
+  .error-box { color: var(--coral); }
+  .spinner {
+    width: 34px; height: 34px; margin: 0 auto 18px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .btn {
+    font-family: var(--font-sans); font-size: 0.95rem; font-weight: 600; padding: 11px 18px;
+    border-radius: 999px; border: 1px solid transparent; cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); }
+  .btn-outline { background: transparent; color: var(--ink); border-color: var(--border); }
+  .btn-danger { background: var(--coral); color: #fff; }
+  .btn-block { width: 100%; }
+  .icon-btn { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--ink-soft); padding: 6px; }
+  .icon-btn.danger:hover { color: var(--coral); }
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin: 28px 0 14px; }
+  .review-banner {
+    display: flex; align-items: center; justify-content: space-between; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-top: 8px;
+  }
+  .review-banner.due { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 10%, var(--surface)); }
+  .folder-grid { display: flex; flex-direction: column; gap: 10px; }
+  .folder-tab {
+    display: flex; align-items: center; justify-content: space-between; background: var(--surface);
+    border: 1px solid var(--border); border-left: 5px solid var(--tab-color, var(--accent));
+    border-radius: 10px; padding: 16px 18px; text-align: left; cursor: pointer; font-family: var(--font-sans); width: 100%;
+  }
+  .folder-name { font-family: var(--font-serif); font-size: 1.1rem; font-weight: 600; }
+  .folder-meta { color: var(--ink-soft); font-size: 0.85rem; }
+  .folder-head { display: flex; align-items: center; justify-content: space-between; border-left: 5px solid var(--tab-color, var(--accent)); padding-left: 14px; }
+  .course-list { display: flex; flex-direction: column; }
+  .course-row { display: flex; align-items: center; justify-content: space-between; padding: 15px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .course-row:hover .course-name { color: var(--accent); }
+  .course-row-main { display: flex; flex-direction: column; gap: 3px; }
+  .course-name { font-weight: 600; }
+  .course-meta { font-size: 0.82rem; color: var(--ink-soft); }
+  .chev { color: var(--ink-soft); font-size: 1.2rem; }
+  .course-head { display: flex; align-items: center; justify-content: space-between; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 18px 0 20px; }
+  .tab {
+    background: none; border: none; padding: 10px 4px; margin-right: 18px; font-family: var(--font-sans);
+    font-size: 0.95rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .fiche-content ul, .fiche-content ol { padding-left: 1.2em; }
+  .fiche-content li { margin-bottom: 0.4em; line-height: 1.5; }
+  .empty-msg { color: var(--ink-soft); padding: 30px 4px; text-align: center; }
+  .quiz-intro { text-align: center; padding: 30px 0; }
+  .quiz-screen { display: flex; flex-direction: column; gap: 18px; min-height: 70vh; }
+  .quiz-progress { color: var(--ink-soft); font-size: 0.85rem; }
+  .quiz-question { font-size: 1.3rem; }
+  .quiz-options { display: flex; flex-direction: column; gap: 10px; }
+  .quiz-option {
+    text-align: left; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); font-family: var(--font-sans); font-size: 0.98rem; cursor: pointer; color: var(--ink);
+  }
+  .quiz-option:disabled { cursor: default; }
+  .quiz-option.correct { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+  .quiz-option.incorrect { border-color: var(--coral); background: color-mix(in srgb, var(--coral) 12%, var(--surface)); }
+  .quiz-feedback { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; font-size: 0.9rem; color: var(--ink-soft); }
+  .quiz-actions { display: flex; justify-content: space-between; margin-top: auto; padding-top: 10px; }
+  .quiz-end { align-items: center; text-align: center; justify-content: center; }
+  .quiz-score { font-family: var(--font-serif); font-size: 2.4rem; margin: 6px 0 20px; }
+  .cards-toolbar { margin-bottom: 16px; }
+  .flashcard-list { display: flex; flex-direction: column; gap: 10px; }
+  .flashcard-row { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .fc-q { font-weight: 600; margin-bottom: 4px; }
+  .fc-a { color: var(--ink-soft); font-size: 0.92rem; }
+  .fc-meta { margin-top: 8px; font-size: 0.78rem; color: var(--ink-soft); }
+  .badge-due { color: var(--amber); font-weight: 600; }
+  .review-screen { display: flex; flex-direction: column; align-items: center; gap: 22px; min-height: 75vh; padding-top: 40px; }
+  .review-progress { color: var(--ink-soft); font-size: 0.85rem; }
+  .review-card {
+    width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 34px 24px; text-align: center; min-height: 160px; display: flex; flex-direction: column; justify-content: center; gap: 16px;
+  }
+  .review-q { font-family: var(--font-serif); font-size: 1.35rem; }
+  .review-divider { height: 1px; background: var(--border); }
+  .review-a { font-size: 1.05rem; color: var(--ink-soft); }
+  .rate-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; }
+  .rate-btn { padding: 12px 4px; border-radius: 10px; border: none; font-family: var(--font-sans); font-size: 0.85rem; font-weight: 600; cursor: pointer; color: #fff; }
+  .rate-again { background: var(--coral); } .rate-hard { background: var(--amber); }
+  .rate-good { background: var(--accent); } .rate-easy { background: #3D5A80; }
+  .review-empty, .review-end { text-align: center; padding-top: 60px; }
+  .upload-screen, .config-screen, .auth-screen { display: flex; flex-direction: column; gap: 10px; }
+  .field-label { font-size: 0.85rem; color: var(--ink-soft); margin-top: 14px; }
+  input[type="text"], input[type="email"], input[type="password"], input[type="file"], textarea {
+    font-family: var(--font-sans); font-size: 1rem; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink); width: 100%;
+  }
+  textarea { font-family: 'SF Mono', monospace; font-size: 0.85rem; resize: vertical; }
+  .upload-actions { display: flex; justify-content: space-between; margin-top: 24px; }
+  .upload-progress { align-items: center; text-align: center; padding-top: 80px; }
+  .error-text { color: var(--coral); font-size: 0.9rem; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(10,14,20,0.5); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .modal-overlay.show { display: flex; }
+  .modal-box { background: var(--surface); border-radius: 14px; padding: 22px; width: 100%; max-width: 380px; }
+  .modal-box h3 { margin-top: 0; }
+  .modal-box input.input-error { border-color: var(--coral); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Chargement…</div></div>
+<div id="modal-overlay" class="modal-overlay"></div>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<script>
+(function () {
+  'use strict';
+
+  const MAX_CHARS = 30000;
+  const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+  const ACCENTS = ['#2F7864', '#C98A2C', '#3D5A80', '#8B5E3C', '#6B4C9A', '#4A7C59'];
+  const app = document.getElementById('app');
+  let db = null, auth = null, currentUid = null, routerAttached = false;
+
+  // ---------- helpers ----------
+  function accentFor(id) { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return ACCENTS[h % ACCENTS.length]; }
+  function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function fmtDate(ts) { try { return new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }); } catch (e) { return ''; } }
+  function nav(hash) { if (location.hash.slice(1) === hash) render(); else location.hash = hash; }
+  function wireNav() { app.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', () => nav(el.getAttribute('data-nav')))); }
+
+  function showModal(innerHtml) {
+    const overlay = document.getElementById('modal-overlay');
+    overlay.innerHTML = '<div class="modal-box">' + innerHtml + '</div>';
+    overlay.classList.add('show');
+    overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+  }
+  function closeModal() { document.getElementById('modal-overlay').classList.remove('show'); }
+  function confirmDialog(message) {
+    return new Promise(resolve => {
+      showModal('<p>' + escapeHtml(message) + '</p><div class="modal-actions">' +
+        '<button class="btn btn-outline" id="modal-no">Annuler</button>' +
+        '<button class="btn btn-danger" id="modal-yes">Confirmer</button></div>');
+      document.getElementById('modal-no').onclick = () => { closeModal(); resolve(false); };
+      document.getElementById('modal-yes').onclick = () => { closeModal(); resolve(true); };
+    });
+  }
+
+  // ---------- mini markdown ----------
+  function inlineMd(text) {
+    text = escapeHtml(text);
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/(^|[^*])\*([^*]+)\*([^*]|$)/g, '$1<em>$2</em>$3');
+    return text;
+  }
+  function renderMarkdown(md) {
+    if (!md || !md.trim()) return '<p class="muted">Pas de contenu.</p>';
+    const lines = md.split('\n'); let html = '', inList = null;
+    function closeList() { if (inList) { html += '</' + inList + '>'; inList = null; } }
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) { closeList(); continue; }
+      let m;
+      if ((m = line.match(/^###\s+(.*)/))) { closeList(); html += '<h3>' + inlineMd(m[1]) + '</h3>'; continue; }
+      if ((m = line.match(/^##\s+(.*)/))) { closeList(); html += '<h2>' + inlineMd(m[1]) + '</h2>'; continue; }
+      if ((m = line.match(/^#\s+(.*)/))) { closeList(); html += '<h2>' + inlineMd(m[1]) + '</h2>'; continue; }
+      if ((m = line.match(/^[-*]\s+(.*)/))) { if (inList !== 'ul') { closeList(); html += '<ul>'; inList = 'ul'; } html += '<li>' + inlineMd(m[1]) + '</li>'; continue; }
+      if ((m = line.match(/^\d+[.)]\s+(.*)/))) { if (inList !== 'ol') { closeList(); html += '<ol>'; inList = 'ol'; } html += '<li>' + inlineMd(m[1]) + '</li>'; continue; }
+      closeList(); html += '<p>' + inlineMd(line) + '</p>';
+    }
+    closeList(); return html;
+  }
+
+  // ---------- SM-2 ----------
+  function sm2Update(card, quality) {
+    let easeFactor = card.easeFactor || 2.5, interval = card.interval || 0, repetitions = card.repetitions || 0;
+    if (quality < 3) { repetitions = 0; interval = 1; }
+    else {
+      if (repetitions === 0) interval = 1;
+      else if (repetitions === 1) interval = 6;
+      else interval = Math.round(interval * easeFactor);
+      repetitions += 1;
+    }
+    easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+    const next = new Date(); next.setDate(next.getDate() + interval);
+    return { easeFactor: Math.round(easeFactor * 100) / 100, interval, repetitions, nextReviewDate: next.toISOString(), lastReviewedAt: new Date().toISOString() };
+  }
+
+  // ---------- data layer (Firestore, scoped per user) ----------
+  function uc(name) { return db.collection('users').doc(currentUid).collection(name); }
+  function ud(name, id) { return uc(name).doc(id); }
+
+  async function listFoldersWithCounts() {
+    const snap = await uc('folders').orderBy('createdAt', 'desc').get();
+    const folders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    for (const f of folders) { const cs = await uc('courses').where('folderId', '==', f.id).get(); f.courseCount = cs.size; }
+    return folders;
+  }
+  async function createFolder(name) { const ref = await uc('folders').add({ name, createdAt: Date.now() }); return ref.id; }
+  async function getFolder(id) { const snap = await ud('folders', id).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
+  async function deleteCourseCascade(courseId) {
+    const cardsSnap = await uc('cards').where('courseId', '==', courseId).get();
+    for (const c of cardsSnap.docs) await ud('cards', c.id).delete();
+    await ud('courses', courseId).delete();
+  }
+  async function deleteFolder(folderId) {
+    const coursesSnap = await uc('courses').where('folderId', '==', folderId).get();
+    for (const c of coursesSnap.docs) await deleteCourseCascade(c.id);
+    await ud('folders', folderId).delete();
+  }
+  async function listCourses(folderId) { const snap = await uc('courses').where('folderId', '==', folderId).orderBy('createdAt', 'desc').get(); return snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+  async function getCourse(id) { const snap = await ud('courses', id).get(); return snap.exists ? { id: snap.id, ...snap.data() } : null; }
+  async function listCardsForCourse(courseId) { const snap = await uc('cards').where('courseId', '==', courseId).get(); return snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+
+  // ---------- PDF extraction ----------
+  async function extractPdfText(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(it => it.str).join(' ') + '\n\n';
+      if (text.length > MAX_CHARS * 2) break;
+    }
+    let truncated = false;
+    if (text.length > MAX_CHARS) { text = text.slice(0, MAX_CHARS); truncated = true; }
+    return { text, truncated };
+  }
+
+  // ---------- Gemini AI generation ----------
+  async function generateMaterials(courseName, text) {
+    const apiKey = localStorage.getItem('geminiApiKey');
+    if (!apiKey) throw new Error('Clé API Gemini manquante (vérifie les Paramètres).');
+    const prompt = 'Tu es un assistant pédagogique francophone. Voici le contenu extrait d\'un cours intitulé "' +
+      courseName + '".\n\nContenu du cours :\n---\n' + text + '\n---\n\n' +
+      'Génère une fiche de révision, un quiz et des flashcards à partir de ce contenu, en français, en te ' +
+      'basant uniquement sur les informations données (n\'invente rien).\n' +
+      '- fiche : Markdown dense mais clair (titres avec #, ##, listes avec -, gras avec **).\n' +
+      '- quiz : entre 8 et 12 questions à choix multiple, 4 options chacune, variées.\n' +
+      '- flashcards : entre 15 et 25 cartes question/réponse courtes, une notion par carte.';
+    const schema = {
+      type: 'OBJECT',
+      properties: {
+        fiche: { type: 'STRING' },
+        quiz: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+          question: { type: 'STRING' }, options: { type: 'ARRAY', items: { type: 'STRING' } },
+          correctIndex: { type: 'INTEGER' }, explanation: { type: 'STRING' }
+        }, required: ['question', 'options', 'correctIndex', 'explanation'] } },
+        flashcards: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+          question: { type: 'STRING' }, answer: { type: 'STRING' }
+        }, required: ['question', 'answer'] } }
+      },
+      required: ['fiche', 'quiz', 'flashcards']
+    };
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(apiKey);
+    const res = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', responseSchema: schema } })
+    });
+    if (!res.ok) {
+      let bodyText = ''; try { bodyText = await res.text(); } catch (e) {}
+      const err = new Error('Erreur Gemini ' + res.status + (bodyText ? (' : ' + bodyText.slice(0, 200)) : ''));
+      err.status = res.status; throw err;
+    }
+    const json = await res.json();
+    const candidate = json.candidates && json.candidates[0];
+    const textOut = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0] && candidate.content.parts[0].text;
+    if (!textOut) throw new Error('Réponse Gemini vide ou inattendue.');
+    return JSON.parse(textOut);
+  }
+  function errorMessageFor(e) {
+    if (e && e.status === 429) return "Limite de requêtes Gemini atteinte pour l'instant, réessaie dans une minute.";
+    if (e && e.status === 400) return 'Requête invalide (PDF peut-être trop long, ou clé API incorrecte).';
+    if (e && e.status === 403) return 'Clé API refusée. Vérifie-la dans les Paramètres.';
+    return (e && e.message) || 'Erreur inconnue.';
+  }
+
+  // ---------- router ----------
+  async function render() {
+    const hash = location.hash.slice(1) || 'home';
+    const parts = hash.split(':'); const view = parts[0];
+    app.innerHTML = '<div class="loading">Chargement…</div>';
+    try {
+      if (view === 'folder') await renderFolder(parts[1]);
+      else if (view === 'course') await renderCourse(parts[1], parts[2] || 'fiche');
+      else if (view === 'review') await renderReview(parts[1], parts[2]);
+      else if (view === 'settings') renderSettings();
+      else await renderHome();
+    } catch (e) {
+      console.error(e);
+      app.innerHTML = '<div class="error-box">Une erreur est survenue.<br>' + escapeHtml(e.message || String(e)) + '</div>';
+    }
+  }
+
+  // ---------- views ----------
+  async function renderHome() {
+    const folders = await listFoldersWithCounts();
+    const nowIso = new Date().toISOString();
+    const dueSnap = await uc('cards').where('nextReviewDate', '<=', nowIso).get();
+    const dueCount = dueSnap.size;
+    const folderHtml = folders.length ? folders.map(f =>
+      '<button class="folder-tab" style="--tab-color:' + accentFor(f.id) + '" data-nav="folder:' + f.id + '">' +
+      '<span class="folder-name">' + escapeHtml(f.name) + '</span><span class="folder-meta">' + f.courseCount + ' cours</span></button>'
+    ).join('') : '<p class="empty-msg">Pas encore de dossier. Crée-en un pour commencer.</p>';
+
+    app.innerHTML =
+      '<header class="topbar"><h1>Révizo</h1><button class="icon-btn" data-nav="settings" title="Paramètres">⚙</button></header>' +
+      '<main class="container">' +
+      '<section class="review-banner' + (dueCount ? ' due' : '') + '">' +
+      '<div><strong>' + dueCount + '</strong> carte' + (dueCount > 1 ? 's' : '') + ' à réviser aujourd\'hui</div>' +
+      '<button class="btn btn-primary" data-nav="review">' + (dueCount ? 'Réviser' : 'Réviser quand même') + '</button></section>' +
+      '<div class="section-head"><h2>Mes dossiers</h2><button class="btn btn-outline" id="btn-new-folder">+ Nouveau dossier</button></div>' +
+      '<div class="folder-grid">' + folderHtml + '</div></main>';
+    wireNav();
+    document.getElementById('btn-new-folder').onclick = onCreateFolder;
+  }
+
+  function onCreateFolder() {
+    showModal('<h3>Nouveau dossier</h3><input type="text" id="modal-folder-name" placeholder="Ex. Biologie, Histoire..." maxlength="60">' +
+      '<div class="modal-actions"><button class="btn btn-outline" id="modal-cancel">Annuler</button><button class="btn btn-primary" id="modal-confirm">Créer</button></div>');
+    const input = document.getElementById('modal-folder-name'); input.focus();
+    document.getElementById('modal-cancel').onclick = closeModal;
+    const confirm = async () => {
+      const name = input.value.trim();
+      if (!name) { input.classList.add('input-error'); return; }
+      closeModal(); app.innerHTML = '<div class="loading">Création…</div>';
+      const id = await createFolder(name); nav('folder:' + id);
+    };
+    document.getElementById('modal-confirm').onclick = confirm;
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') confirm(); });
+  }
+
+  async function renderFolder(folderId) {
+    const folder = await getFolder(folderId);
+    if (!folder) { nav('home'); return; }
+    const courses = await listCourses(folderId);
+    const nowIso = new Date().toISOString();
+    const dueSnap = await uc('cards').where('folderId', '==', folderId).where('nextReviewDate', '<=', nowIso).get();
+    const dueCount = dueSnap.size;
+    const rows = courses.length ? courses.map(c =>
+      '<div class="course-row" data-nav="course:' + c.id + ':fiche"><div class="course-row-main">' +
+      '<span class="course-name">' + escapeHtml(c.name) + '</span><span class="course-meta">' + (c.quiz || []).length +
+      ' questions · ' + (c.cardCount || 0) + ' cartes · ' + fmtDate(c.createdAt) + '</span></div><span class="chev">›</span></div>'
+    ).join('') : '<p class="empty-msg">Pas encore de cours dans ce dossier.</p>';
+
+    app.innerHTML =
+      '<header class="topbar"><button class="back-btn" data-nav="home">← Dossiers</button></header><main class="container">' +
+      '<div class="folder-head" style="--tab-color:' + accentFor(folder.id) + '"><h1>' + escapeHtml(folder.name) + '</h1>' +
+      '<button class="icon-btn danger" id="btn-del-folder" title="Supprimer">🗑</button></div>' +
+      (dueCount ? '<section class="review-banner due"><div><strong>' + dueCount + '</strong> carte' + (dueCount > 1 ? 's' : '') + ' à réviser</div>' +
+        '<button class="btn btn-primary" data-nav="review:folder:' + folderId + '">Réviser</button></section>' : '') +
+      '<div class="section-head"><h2>Cours</h2><button class="btn btn-outline" id="btn-add-course">+ Ajouter un cours</button></div>' +
+      '<div class="course-list">' + rows + '</div></main>';
+    wireNav();
+    document.getElementById('btn-add-course').onclick = () => openUploadScreen(folderId);
+    document.getElementById('btn-del-folder').onclick = async () => {
+      const ok = await confirmDialog('Supprimer "' + folder.name + '" et tous ses cours ? Irréversible.');
+      if (!ok) return;
+      app.innerHTML = '<div class="loading">Suppression…</div>'; await deleteFolder(folderId); nav('home');
+    };
+  }
+
+  async function renderCourse(courseId, tab) {
+    const course = await getCourse(courseId);
+    if (!course) { nav('home'); return; }
+    const folder = await getFolder(course.folderId);
+    const tabsHtml = '<div class="tabs">' +
+      '<button class="tab' + (tab === 'fiche' ? ' active' : '') + '" data-nav="course:' + courseId + ':fiche">Fiche</button>' +
+      '<button class="tab' + (tab === 'quiz' ? ' active' : '') + '" data-nav="course:' + courseId + ':quiz">Quiz</button>' +
+      '<button class="tab' + (tab === 'cards' ? ' active' : '') + '" data-nav="course:' + courseId + ':cards">Cartes</button></div>';
+    let bodyHtml = '';
+    if (tab === 'quiz') bodyHtml = renderQuizIntro(course);
+    else if (tab === 'cards') bodyHtml = renderCardsList(await listCardsForCourse(courseId), courseId);
+    else bodyHtml = '<div class="fiche-content">' + renderMarkdown(course.fiche) + '</div>';
+
+    app.innerHTML = '<header class="topbar"><button class="back-btn" data-nav="folder:' + course.folderId + '">← ' +
+      escapeHtml(folder ? folder.name : 'Dossier') + '</button></header><main class="container">' +
+      '<div class="course-head"><h1>' + escapeHtml(course.name) + '</h1><button class="icon-btn danger" id="btn-del-course">🗑</button></div>' +
+      tabsHtml + bodyHtml + '</main>';
+    wireNav();
+    document.getElementById('btn-del-course').onclick = async () => {
+      const ok = await confirmDialog('Supprimer le cours "' + course.name + '" et toutes ses cartes ?');
+      if (!ok) return;
+      app.innerHTML = '<div class="loading">Suppression…</div>'; await deleteCourseCascade(courseId); nav('folder:' + course.folderId);
+    };
+    if (tab === 'quiz') { const btn = document.getElementById('btn-start-quiz'); if (btn) btn.onclick = () => startQuiz(course); }
+  }
+
+  function renderQuizIntro(course) {
+    const qCount = (course.quiz || []).length;
+    if (!qCount) return '<p class="empty-msg">Pas de quiz généré pour ce cours.</p>';
+    return '<div class="quiz-intro"><p>' + qCount + ' questions</p>' +
+      (course.lastQuizScore != null ? '<p class="muted">Dernier score : ' + course.lastQuizScore + '/' + qCount + '</p>' : '') +
+      '<button class="btn btn-primary" id="btn-start-quiz">Commencer le quiz</button></div>';
+  }
+
+  function startQuiz(course) {
+    const questions = course.quiz || []; let idx = 0, score = 0, answered = false;
+    function renderQ() {
+      const q = questions[idx];
+      app.innerHTML = '<main class="container quiz-screen"><div class="quiz-progress">Question ' + (idx + 1) + ' / ' + questions.length + '</div>' +
+        '<h2 class="quiz-question">' + escapeHtml(q.question) + '</h2><div class="quiz-options">' +
+        q.options.map((opt, i) => '<button class="quiz-option" data-i="' + i + '">' + escapeHtml(opt) + '</button>').join('') +
+        '</div><div class="quiz-feedback" id="quiz-feedback" style="display:none"></div>' +
+        '<div class="quiz-actions"><button class="btn btn-outline" id="quiz-quit">Quitter</button>' +
+        '<button class="btn btn-primary" id="quiz-next" style="display:none">' + (idx + 1 < questions.length ? 'Suivant' : 'Terminer') + '</button></div></main>';
+      document.getElementById('quiz-quit').onclick = () => nav('course:' + course.id + ':quiz');
+      app.querySelectorAll('.quiz-option').forEach(btn => {
+        btn.onclick = () => {
+          if (answered) return; answered = true;
+          const i = parseInt(btn.getAttribute('data-i'), 10); const correct = q.correctIndex;
+          app.querySelectorAll('.quiz-option').forEach(b => b.disabled = true);
+          btn.classList.add(i === correct ? 'correct' : 'incorrect');
+          if (i !== correct) { const cb = app.querySelector('.quiz-option[data-i="' + correct + '"]'); if (cb) cb.classList.add('correct'); }
+          else score++;
+          const fb = document.getElementById('quiz-feedback'); fb.style.display = 'block'; fb.textContent = q.explanation || '';
+          document.getElementById('quiz-next').style.display = 'inline-flex';
+        };
+      });
+      document.getElementById('quiz-next').onclick = async () => {
+        idx++; answered = false;
+        if (idx >= questions.length) {
+          await ud('courses', course.id).update({ lastQuizScore: score });
+          app.innerHTML = '<main class="container quiz-screen quiz-end"><h2>Quiz terminé</h2><p class="quiz-score">' + score + ' / ' + questions.length + '</p>' +
+            '<div class="quiz-actions"><button class="btn btn-outline" data-nav="course:' + course.id + ':quiz">Retour au cours</button>' +
+            '<button class="btn btn-primary" id="quiz-retry">Recommencer</button></div></main>';
+          wireNav();
+          document.getElementById('quiz-retry').onclick = () => { score = 0; idx = 0; answered = false; renderQ(); };
+          return;
+        }
+        renderQ();
+      };
+    }
+    renderQ();
+  }
+
+  function renderCardsList(cards, courseId) {
+    if (!cards.length) return '<p class="empty-msg">Pas de cartes pour ce cours.</p>';
+    const now = new Date(); const dueCount = cards.filter(c => new Date(c.nextReviewDate) <= now).length;
+    const items = cards.map(c => '<div class="flashcard-row"><div class="fc-q">' + escapeHtml(c.question) + '</div>' +
+      '<div class="fc-a">' + escapeHtml(c.answer) + '</div><div class="fc-meta">' +
+      (new Date(c.nextReviewDate) <= now ? '<span class="badge-due">à réviser</span>' : 'prochaine révision : ' + fmtDate(c.nextReviewDate)) +
+      '</div></div>').join('');
+    return '<div class="cards-toolbar"><button class="btn btn-primary" data-nav="review:course:' + courseId + '">' +
+      (dueCount ? 'Réviser (' + dueCount + ' due' + (dueCount > 1 ? 's' : '') + ')' : 'Revoir toutes les cartes') +
+      '</button></div><div class="flashcard-list">' + items + '</div>';
+  }
+
+  async function renderReview(scopeType, scopeId) {
+    const nowIso = new Date().toISOString();
+    let query;
+    if (scopeType === 'folder') query = uc('cards').where('folderId', '==', scopeId).where('nextReviewDate', '<=', nowIso).orderBy('nextReviewDate', 'asc');
+    else if (scopeType === 'course') query = uc('cards').where('courseId', '==', scopeId).where('nextReviewDate', '<=', nowIso).orderBy('nextReviewDate', 'asc');
+    else query = uc('cards').where('nextReviewDate', '<=', nowIso).orderBy('nextReviewDate', 'asc');
+    const snap = await query.get();
+    const cards = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    function backTarget() { if (scopeType === 'course') return 'course:' + scopeId + ':cards'; if (scopeType === 'folder') return 'folder:' + scopeId; return 'home'; }
+    if (!cards.length) {
+      app.innerHTML = '<main class="container review-empty"><h2>Rien à réviser pour l\'instant 🎉</h2><p class="muted">Toutes les cartes sont à jour.</p>' +
+        '<div class="modal-actions"><button class="btn btn-outline" data-nav="' + backTarget() + '">Retour</button>' +
+        '<button class="btn btn-primary" id="btn-review-anyway">Réviser quand même</button></div></main>';
+      wireNav();
+      document.getElementById('btn-review-anyway').onclick = async () => {
+        let q2;
+        if (scopeType === 'folder') q2 = uc('cards').where('folderId', '==', scopeId);
+        else if (scopeType === 'course') q2 = uc('cards').where('courseId', '==', scopeId);
+        else q2 = uc('cards');
+        const s2 = await q2.get(); const all = s2.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (!all.length) { app.innerHTML = '<main class="container"><p class="empty-msg">Aucune carte n\'existe encore.</p></main>'; return; }
+        runReviewSession(all, scopeType, scopeId);
+      };
+      return;
+    }
+    runReviewSession(cards, scopeType, scopeId);
+  }
+
+  function runReviewSession(cards, scopeType, scopeId) {
+    let idx = 0, revealed = false, reviewedCount = 0;
+    function backTarget() { if (scopeType === 'course') return 'course:' + scopeId + ':cards'; if (scopeType === 'folder') return 'folder:' + scopeId; return 'home'; }
+    function renderCard() {
+      const c = cards[idx];
+      app.innerHTML = '<main class="container review-screen"><div class="review-progress">Carte ' + (idx + 1) + ' / ' + cards.length + '</div>' +
+        '<div class="review-card"><div class="review-q">' + escapeHtml(c.question) + '</div>' +
+        (revealed ? '<div class="review-divider"></div><div class="review-a">' + escapeHtml(c.answer) + '</div>' : '') + '</div>' +
+        (!revealed ? '<button class="btn btn-primary btn-block" id="btn-reveal">Voir la réponse</button>' :
+          '<div class="rate-buttons"><button class="rate-btn rate-again" data-q="0">Encore</button>' +
+          '<button class="rate-btn rate-hard" data-q="3">Difficile</button><button class="rate-btn rate-good" data-q="4">Bien</button>' +
+          '<button class="rate-btn rate-easy" data-q="5">Facile</button></div>') +
+        '<button class="btn-text" id="btn-quit-review">Quitter la révision</button></main>';
+      document.getElementById('btn-quit-review').onclick = () => nav(backTarget());
+      if (!revealed) document.getElementById('btn-reveal').onclick = () => { revealed = true; renderCard(); };
+      else app.querySelectorAll('.rate-btn').forEach(btn => {
+        btn.onclick = async () => {
+          const q = parseInt(btn.getAttribute('data-q'), 10);
+          await ud('cards', c.id).update(sm2Update(c, q));
+          reviewedCount++; idx++; revealed = false;
+          if (idx >= cards.length) {
+            app.innerHTML = '<main class="container review-end"><h2>Séance terminée</h2><p>' + reviewedCount + ' carte' +
+              (reviewedCount > 1 ? 's' : '') + ' révisée' + (reviewedCount > 1 ? 's' : '') + '. À bientôt !</p>' +
+              '<button class="btn btn-primary" data-nav="' + backTarget() + '">Retour</button></main>';
+            wireNav(); return;
+          }
+          renderCard();
+        };
+      });
+    }
+    renderCard();
+  }
+
+  // ---------- upload flow ----------
+  function openUploadScreen(folderId) {
+    app.innerHTML = '<header class="topbar"><button class="back-btn" data-nav="folder:' + folderId + '">← Annuler</button></header>' +
+      '<main class="container upload-screen"><h2>Ajouter un cours</h2><label class="field-label">Fichier PDF</label>' +
+      '<input type="file" id="upload-file" accept="application/pdf"><label class="field-label">Nom du cours</label>' +
+      '<input type="text" id="upload-name" placeholder="Sera rempli automatiquement">' +
+      '<div class="upload-actions"><span></span><button class="btn btn-primary" id="upload-submit" disabled>Générer</button></div></main>';
+    wireNav();
+    const fileInput = document.getElementById('upload-file'), nameInput = document.getElementById('upload-name'), submitBtn = document.getElementById('upload-submit');
+    fileInput.onchange = () => { if (fileInput.files[0]) { submitBtn.disabled = false; if (!nameInput.value) nameInput.value = fileInput.files[0].name.replace(/\.pdf$/i, ''); } };
+    submitBtn.onclick = () => runUploadFlow(folderId, fileInput.files[0], nameInput.value.trim() || 'Cours sans titre');
+  }
+
+  async function runUploadFlow(folderId, file, name) {
+    function step(msg) { app.innerHTML = '<main class="container upload-screen upload-progress"><div class="spinner"></div><p>' + escapeHtml(msg) + '</p></main>'; }
+    try {
+      step('Lecture du PDF…');
+      const { text, truncated } = await extractPdfText(file);
+      if (!text.trim()) throw new Error("Aucun texte n'a pu être extrait de ce PDF (peut-être scanné en image).");
+      step("L'IA génère la fiche, le quiz et les cartes… (10 à 40 secondes)");
+      const data = await generateMaterials(name, text);
+      if (!data || typeof data !== 'object') throw new Error('Réponse IA invalide.');
+      step('Enregistrement…');
+      const courseRef = await uc('courses').add({
+        folderId, name, createdAt: Date.now(), fiche: data.fiche || '',
+        quiz: Array.isArray(data.quiz) ? data.quiz : [],
+        cardCount: Array.isArray(data.flashcards) ? data.flashcards.length : 0,
+        lastQuizScore: null, truncatedSource: !!truncated
+      });
+      const nowIso = new Date().toISOString();
+      for (const fcard of (Array.isArray(data.flashcards) ? data.flashcards : [])) {
+        if (!fcard || !fcard.question) continue;
+        await uc('cards').add({
+          courseId: courseRef.id, folderId, question: String(fcard.question).slice(0, 500), answer: String(fcard.answer || '').slice(0, 500),
+          easeFactor: 2.5, interval: 0, repetitions: 0, nextReviewDate: nowIso, lastReviewedAt: null, createdAt: Date.now()
+        });
+      }
+      nav('course:' + courseRef.id + ':fiche');
+    } catch (e) {
+      console.error(e);
+      app.innerHTML = '<main class="container upload-screen"><h2>Ça n\'a pas fonctionné</h2><p class="error-text">' + escapeHtml(errorMessageFor(e)) + '</p>' +
+        '<div class="upload-actions"><button class="btn btn-outline" data-nav="folder:' + folderId + '">Retour</button>' +
+        '<button class="btn btn-primary" id="retry-btn">Réessayer</button></div></main>';
+      wireNav();
+      document.getElementById('retry-btn').onclick = () => openUploadScreen(folderId);
+    }
+  }
+
+  // ---------- settings ----------
+  function renderSettings() {
+    const key = localStorage.getItem('geminiApiKey') || '';
+    const masked = key ? key.slice(0, 6) + '••••••••' + key.slice(-4) : '(non défini)';
+    app.innerHTML = '<header class="topbar"><button class="back-btn" data-nav="home">← Retour</button></header><main class="container">' +
+      '<h1>Paramètres</h1><p class="muted">Clé Gemini actuelle : ' + escapeHtml(masked) + '</p>' +
+      '<label class="field-label">Nouvelle clé API Gemini (laisser vide pour ne pas changer)</label>' +
+      '<input type="text" id="settings-gemini"><button class="btn btn-primary" id="settings-save" style="margin-top:14px">Enregistrer</button>' +
+      '<div style="margin-top:36px; border-top:1px solid var(--border); padding-top:20px;">' +
+      '<button class="btn btn-outline" id="settings-signout">Se déconnecter</button></div></main>';
+    wireNav();
+    document.getElementById('settings-save').onclick = () => {
+      const v = document.getElementById('settings-gemini').value.trim();
+      if (v) localStorage.setItem('geminiApiKey', v);
+      nav('home');
+    };
+    document.getElementById('settings-signout').onclick = () => auth.signOut();
+  }
+
+  // ---------- config screen (first run) ----------
+  function parseFirebaseConfigBlock(raw) {
+    const start = raw.indexOf('{'), end = raw.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) throw new Error('bad format');
+    const obj = new Function('return (' + raw.slice(start, end + 1) + ')')();
+    if (!obj.apiKey || !obj.projectId) throw new Error('missing fields');
+    return obj;
+  }
+  function renderConfigScreen() {
+    app.innerHTML = '<main class="container config-screen"><h1>Configuration</h1>' +
+      '<p class="muted">Colle ici les deux éléments récupérés plus tôt. Tout reste uniquement sur cet appareil.</p>' +
+      '<label class="field-label">Bloc de configuration Firebase</label>' +
+      '<textarea id="cfg-firebase" rows="8" placeholder="const firebaseConfig = { ... }"></textarea>' +
+      '<label class="field-label">Clé API Gemini</label><input type="text" id="cfg-gemini" placeholder="AIzaSy...">' +
+      '<p class="error-text" id="cfg-error" style="display:none"></p>' +
+      '<button class="btn btn-primary btn-block" id="cfg-save" style="margin-top:18px">Enregistrer et continuer</button></main>';
+    document.getElementById('cfg-save').onclick = () => {
+      const fbRaw = document.getElementById('cfg-firebase').value.trim();
+      const geminiKey = document.getElementById('cfg-gemini').value.trim();
+      const errEl = document.getElementById('cfg-error'); errEl.style.display = 'none';
+      if (!geminiKey) { errEl.textContent = 'Colle ta clé API Gemini.'; errEl.style.display = 'block'; return; }
+      let parsed;
+      try { parsed = parseFirebaseConfigBlock(fbRaw); }
+      catch (e) { errEl.textContent = 'Le bloc Firebase ne semble pas complet. Vérifie que tu as copié tout le code, accolades { } comprises.'; errEl.style.display = 'block'; return; }
+      localStorage.setItem('firebaseConfig', JSON.stringify(parsed));
+      localStorage.setItem('geminiApiKey', geminiKey);
+      location.reload();
+    };
+  }
+
+  // ---------- auth screen ----------
+  function authErrorMessage(e) {
+    const map = {
+      'auth/wrong-password': 'Mot de passe incorrect.', 'auth/invalid-credential': 'Email ou mot de passe incorrect.',
+      'auth/user-not-found': "Aucun compte avec cet email — essaie de créer un compte.",
+      'auth/email-already-in-use': 'Un compte existe déjà avec cet email — connecte-toi plutôt.',
+      'auth/weak-password': 'Mot de passe trop court (6 caractères minimum).', 'auth/invalid-email': 'Adresse email invalide.'
+    };
+    return map[e.code] || e.message || 'Erreur de connexion.';
+  }
+  function renderAuthScreen() {
+    let mode = 'signin';
+    function draw() {
+      app.innerHTML = '<main class="container auth-screen"><h1>Révizo</h1><p class="muted">' +
+        (mode === 'signin' ? 'Connecte-toi pour retrouver tes cours.' : 'Crée ton compte personnel (juste pour toi).') + '</p>' +
+        '<label class="field-label">Email</label><input type="email" id="auth-email">' +
+        '<label class="field-label">Mot de passe</label><input type="password" id="auth-password">' +
+        '<p class="error-text" id="auth-error" style="display:none"></p>' +
+        '<button class="btn btn-primary btn-block" id="auth-submit" style="margin-top:16px">' + (mode === 'signin' ? 'Se connecter' : 'Créer mon compte') + '</button>' +
+        '<button class="btn-text" id="auth-toggle" style="margin-top:14px">' + (mode === 'signin' ? "Pas encore de compte ? Créer un compte" : 'Déjà un compte ? Se connecter') + '</button></main>';
+      document.getElementById('auth-toggle').onclick = () => { mode = mode === 'signin' ? 'signup' : 'signin'; draw(); };
+      document.getElementById('auth-submit').onclick = async () => {
+        const email = document.getElementById('auth-email').value.trim();
+        const password = document.getElementById('auth-password').value;
+        const errEl = document.getElementById('auth-error'); errEl.style.display = 'none';
+        try {
+          if (mode === 'signin') await auth.signInWithEmailAndPassword(email, password);
+          else await auth.createUserWithEmailAndPassword(email, password);
+        } catch (e) { errEl.textContent = authErrorMessage(e); errEl.style.display = 'block'; }
+      };
+    }
+    draw();
+  }
+
+  // ---------- boot ----------
+  (function boot() {
+    const fbRaw = localStorage.getItem('firebaseConfig');
+    const geminiKey = localStorage.getItem('geminiApiKey');
+    if (!fbRaw || !geminiKey) { renderConfigScreen(); return; }
+    let fbConfig;
+    try { fbConfig = JSON.parse(fbRaw); } catch (e) { localStorage.removeItem('firebaseConfig'); renderConfigScreen(); return; }
+    firebase.initializeApp(fbConfig);
+    db = firebase.firestore();
+    auth = firebase.auth();
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        currentUid = user.uid;
+        if (!routerAttached) { window.addEventListener('hashchange', render); routerAttached = true; }
+        render();
+      } else {
+        currentUid = null;
+        renderAuthScreen();
+      }
+    });
+  })();
+})();
+</script>
+</body>
+</html>
