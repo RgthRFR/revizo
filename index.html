@@ -630,8 +630,17 @@
 
   // ---------- config screen (first run) ----------
   function parseFirebaseConfigBlock(raw) {
-    const start = raw.indexOf('{'), end = raw.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) throw new Error('bad format');
+    let searchFrom = 0;
+    const cfgIdx = raw.indexOf('firebaseConfig');
+    if (cfgIdx !== -1) searchFrom = cfgIdx;
+    const start = raw.indexOf('{', searchFrom);
+    if (start === -1) throw new Error('bad format');
+    let depth = 0, end = -1;
+    for (let i = start; i < raw.length; i++) {
+      if (raw[i] === '{') depth++;
+      else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === -1) throw new Error('bad format');
     const obj = new Function('return (' + raw.slice(start, end + 1) + ')')();
     if (!obj.apiKey || !obj.projectId) throw new Error('missing fields');
     return obj;
